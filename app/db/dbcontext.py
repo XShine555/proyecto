@@ -8,4 +8,8 @@ def init_db():
     SQLModel.metadata.create_all(__engine)
 
 def get_session():
-    return Session(__engine)
+    session = Session(__engine)
+    try:
+        yield session
+    finally:
+        session.close()

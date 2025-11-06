@@ -6,7 +6,7 @@ from entities.tipus_usuari import TipusUsuariEnum
 if TYPE_CHECKING:
     from entities.alerta import Alerta
     from entities.assistencia import Assistencia
-    from entities.permis_clase import PermisClasse
+    from app.entities.usuari_classe import UsuariClasse
 
 class Usuari(SQLModel, table=True):
     __tablename__ = "USUARIS"
@@ -20,8 +20,8 @@ class Usuari(SQLModel, table=True):
 
     assistencies: List["Assistencia"] = Relationship(back_populates="usuari")
     alertes: List["Alerta"] = Relationship(back_populates="usuari")
-    permisos_classes: List["PermisClasse"] = Relationship(back_populates="usuari")
+    usuaris_classes: List["UsuariClasse"] = Relationship(back_populates="usuari")
 
 from entities.assistencia import Assistencia
 from entities.alerta import Alerta
-from entities.permis_clase import PermisClasse
+from entities.usuari_classe import UsuariClasse
