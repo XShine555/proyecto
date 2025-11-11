@@ -34,3 +34,7 @@ async def lifespan(app):
         mqtt_service.disconnect()
 
 app = FastAPI(lifespan=lifespan)
+
+@app.get("/health")
+def get_health():
+    return {"status": "ok"}

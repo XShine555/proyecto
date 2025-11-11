@@ -84,6 +84,9 @@ class MQTTService:
         self.__logger.info(f"User {user.nom} {user.cognoms} (Id: {user.id}) accessed Device Id: \"{device_id}\" using RFID Id: \"{rfid_id}\"")
 
     def __on_connect(self, client, userdata, flags, rc):
-        self.__logger.info(f"Connected to MQTT Broker. Result code: {rc}")
+        if rc != 0:
+            self.__logger.error(f"Failed to connect to MQTT Broker. Result code: {rc}")
+            return
+        self.__logger.info(f"Successfully connected to MQTT Broker.")
         self.__mqtt_client.subscribe(self.__suscribe_topic)
         self.__logger.info(f"Subscribed to topic: {self.__suscribe_topic}")
