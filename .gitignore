@@ -126,3 +126,4 @@ credentials.json
 # Keys
 *.crt
 *.key
+secrets.*

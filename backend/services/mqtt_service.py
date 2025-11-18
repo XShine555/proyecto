@@ -1,4 +1,5 @@
 from os import getenv
+from pathlib import Path
 from json import loads as json_loads, dumps as json_dumps
 import paho.mqtt.client as mqtt
 import ssl
@@ -16,9 +17,9 @@ class MQTTService:
         self.aws_port = int(getenv("AWS_MQTT_PORT"))
         self.__suscribe_topic = getenv("AWS_SUSCRIBE_TOPIC")
         self.__base_publish_topic = getenv("AWS_BASE_PUBLISH_TOPIC")
-        self.__root_ca_path = getenv("AWS_ROOT_CA_PATH")
-        self.__certificate_path = getenv("AWS_CERTIFICATE_PATH")
-        self.__private_key_path = getenv("AWS_PRIVATE_KEY_PATH")
+        self.__root_ca_path = Path(getenv("AWS_ROOT_CA_PATH"))
+        self.__certificate_path = Path(getenv("AWS_CERTIFICATE_PATH"))
+        self.__private_key_path = Path(getenv("AWS_PRIVATE_KEY_PATH"))
 
         self.__mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, self.thing_name)
         self.__mqtt_client.tls_set(
