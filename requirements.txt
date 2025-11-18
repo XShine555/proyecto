@@ -3,4 +3,5 @@ uvicorn
 paho-mqtt
 sqlalchemy
 sqlmodel
-python-dotenv
+pymysql
+dotenv
