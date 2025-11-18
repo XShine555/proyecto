@@ -96,7 +96,7 @@ class UserService:
         try:
             new_assistance = Assistencia(
                 usuari_id=user.id,
-                timestamp_assistencia=datetime.now(timezone.utc)
+                timestamp_assistencia=lambda: datetime.now()
             )
             session.add(new_assistance)
             session.commit()
