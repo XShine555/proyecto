@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func
 from sqlmodel import Session, and_, select
 
+from entities.tipus_registre import TipusRegistreEnum
 from entities.classe import Classe
 from entities.dispositiu import Dispositiu
 from entities.horari import Horari
@@ -69,7 +70,7 @@ class UserService:
         finally:
             session.close()
 
-    def has_assisted(self, user: Usuari, date: datetime) -> bool:
+    def has_assisted_start(self, user: Usuari, date: datetime) -> bool:
         session: Session = self.__session_factory()
         try:
             start_of_day = datetime(date.year, date.month, date.day)
@@ -81,7 +82,8 @@ class UserService:
                     Usuari.assistencies.any(
                         and_(
                             Assistencia.timestamp >= start_of_day,
-                            Assistencia.timestamp <= end_of_day
+                            Assistencia.timestamp <= end_of_day,
+                            Assistencia.tipus_registre == TipusRegistreEnum.entrada
                         )
                     )
                 )
@@ -91,12 +93,37 @@ class UserService:
         finally:
             session.close()
 
-    def mark_assistance(self, user: Usuari) -> None:
+    def has_assisted_end(self, user: Usuari, date: datetime) -> bool:
+        session: Session = self.__session_factory()
+        try:
+            start_of_day = datetime(date.year, date.month, date.day)
+            end_of_day = datetime(date.year, date.month, date.day, 23, 59, 59)
+
+            assistencia = session.exec(
+                select(func.count()).where(
+                    Usuari.id == user.id,
+                    Usuari.assistencies.any(
+                        and_(
+                            Assistencia.timestamp >= start_of_day,
+                            Assistencia.timestamp <= end_of_day,
+                            Assistencia.tipus_registre == TipusRegistreEnum.sortida
+                        )
+                    )
+                )
+            ).one()
+
+            return assistencia > 0
+        finally:
+            session.close()
+
+    def mark_assistance(self, user: Usuari, dispositiu: Dispositiu, tipus_registre: TipusRegistreEnum) -> None:
         session: Session = self.__session_factory()
         try:
             new_assistance = Assistencia(
                 usuari_id=user.id,
-                timestamp_assistencia=lambda: datetime.now()
+                timestamp_assistencia=lambda: datetime.now(),
+                dispositiu_id=dispositiu.id,
+                tipus_registre=tipus_registre
             )
             session.add(new_assistance)
             session.commit()

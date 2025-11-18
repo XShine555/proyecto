@@ -18,12 +18,15 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 mqtt_logger = logging.getLogger("mqtt_service")
+device_logger = logging.getLogger("device_service")
 user_logger = logging.getLogger("user_service")
 
 from services.mqtt_service import MQTTService
 from services.user_service import UserService
+from services.device_service import DeviceService
 user_service = UserService(session_factory, user_logger)
-mqtt_service = MQTTService(session_factory, user_service, mqtt_logger)
+device_service = DeviceService(session_factory, device_logger)
+mqtt_service = MQTTService(session_factory, user_service, device_service, mqtt_logger)
 
 @asynccontextmanager
 async def lifespan(app):

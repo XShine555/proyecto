@@ -5,13 +5,15 @@ import paho.mqtt.client as mqtt
 import ssl
 from datetime import datetime
 
+from entities.tipus_registre import TipusRegistreEnum
 from services.user_service import UserService
 
 class MQTTService:
-    def __init__(self, session_factory, user_service, logger):
+    def __init__(self, session_factory, user_service, device_service, logger):
         self.session_factory = session_factory
         self.__logger = logger
         self.__user_service: UserService = user_service
+        self.__device_service = device_service
         
         self.thing_name = getenv("AWS_MQTT_THING_NAME")
         self.aws_endpoint = getenv("AWS_ENDPOINT_URL")
@@ -62,7 +64,16 @@ class MQTTService:
         if not thing_name or not device_id or not rfid_id:
             self.__logger.error(f"Missing device_id, rfid_id or thing_name in payload: {payload}")
             return
-            
+        
+        device = self.__device_service.get_device_by_id(device_id)
+        if not device:
+            json_response = json_dumps({
+                "errorMessage": "Device not found",
+                "isAllowed": False
+            })
+            self.__logger.warning(f"No device found with Device Id: \"{device_id}\"")
+            self.publish(thing_name, json_response)
+            return
         
         self.__logger.info(f"Processed message from Device Id: \"{device_id}\" with RFID Id: \"{rfid_id}\"")
 
@@ -76,8 +87,9 @@ class MQTTService:
             self.publish(thing_name, json_response)
             return
             
-        has_assisted = self.__user_service.has_assisted(user, datetime.now())
-        if has_assisted:
+        has_assisted_start = self.__user_service.has_assisted_start(user, datetime.now())
+        has_assisted_end = self.__user_service.has_assisted_end(user, datetime.now())
+        if has_assisted_start and has_assisted_end:
             json_response = json_dumps({
                 "userId": user.id,
                 "username": f"{user.nom} {user.cognoms}",
@@ -88,7 +100,10 @@ class MQTTService:
             self.__logger.info(f"User {user.nom} {user.cognoms} (Id: {user.id}) has already assisted today.")
             return
         
-        self.__user_service.mark_assistance(user)
+        if has_assisted_start:
+            self.__user_service.mark_assistance(user, device, TipusRegistreEnum.sortida)
+        else:
+            self.__user_service.mark_assistance(user, device, TipusRegistreEnum.entrada)
         
         json_response = json_dumps({
             "userId": user.id,
