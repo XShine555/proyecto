@@ -6,6 +6,7 @@ void setup() {
   Serial.begin(9600);
   Serial.println("eFuse Mac: " + getEfuseMac());
 
+  setupLed();
   setupLcd();
   setupRfid();
   setupAWS();
@@ -19,6 +20,7 @@ void loop() {
 
   loopRfid();
   loopLcd();
+  loopLed();
 }
 
 String getEfuseMac() {

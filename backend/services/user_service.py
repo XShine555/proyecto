@@ -11,8 +11,9 @@ from entities.usuari_classe import UsuariClasse
 from entities.assistencia import Assistencia
 
 class UserService:
-    def __init__(self, session_factory, logger):
+    def __init__(self, session_factory, assistance_service, logger):
         self.__session_factory = session_factory
+        self.__assistance_service = assistance_service
         self.__logger = logger
 
     def get_user_by_id(self, user_id) -> Usuari | None:
@@ -23,22 +24,12 @@ class UserService:
         with self.__session_factory() as session:
             return session.exec(select(Usuari).where(Usuari.targeta_rfid == rfid_id)).first()
 
-    def has_access(self, user_id: int, device_id: int) -> bool:
+    def has_access(self, user: Usuari, dispositiu: Dispositiu) -> bool:
         session: Session = self.__session_factory()
         try:
-            user: Usuari = session.exec(select(Usuari).where(Usuari.id == user_id)).first()
-            if not user or not user.actiu:
-                self.__logger.info(f"Access denied: User {user_id} not found or inactive.")
-                return False
-
-            device: Dispositiu = session.exec(select(Dispositiu).where(Dispositiu.device_id == device_id)).first()
-            if not device:
-                self.__logger.info(f"Access denied: Device {device_id} not found.")
-                return False
-
-            classe: Classe = device.classe
+            classe: Classe = dispositiu.classe
             if not classe:
-                self.__logger.info(f"Access denied: Device {device_id} has no associated class.")
+                self.__logger.info(f"Access denied: Device {dispositiu.id} has no associated class.")
                 return False
 
             usuari_classe = session.exec(
@@ -49,41 +40,57 @@ class UserService:
             ).first()
 
             if not usuari_classe:
-                self.__logger.info(f"Access denied: User {user_id} has no permission for class {classe.id}.")
+                self.__logger.info(f"Access denied: User {user.id} has no permission for class {classe.id}.")
                 return False
-
-            timestamp_now = datetime.now()
-            horaris = session.exec(
-                select(func.count(Horari.id)).where(
-                    Horari.classe == classe,
-                    Horari.timestamp_inici <= timestamp_now,
-                    Horari.timestamp_fi >= timestamp_now
+            
+            horari = session.exec(
+                select(Horari).where(
+                    Horari.classe_id == classe.id,
+                    Horari.timestamp_inici <= datetime.now(),
+                    Horari.timestamp_fi >= datetime.now()
                 )
-            ).one()
+            ).first()
 
-            if horaris == 0:
+            if not horari:
                 self.__logger.info(f"Access denied: No active schedule for class {classe.id}.")
                 return False
             
-            self.__logger.info(f"Access granted: User {user_id} to device {device_id}.")
+            self.__logger.info(f"Access granted: User {user.id} to device {dispositiu.id}.")
             return True
         finally:
             session.close()
 
-    def has_assisted_start(self, user: Usuari, date: datetime) -> bool:
+    def has_absence(self, user: Usuari, clase: Classe, horari: Horari) -> bool:
         session: Session = self.__session_factory()
         try:
-            start_of_day = datetime(date.year, date.month, date.day)
-            end_of_day = datetime(date.year, date.month, date.day, 23, 59, 59)
+            absence = session.exec(
+                select(func.count()).where(
+                    Usuari.id == user.id,
+                    Usuari.assistencies.any(
+                        and_(
+                            Assistencia.classe_id == clase.id,
+                            Assistencia.horari_id == horari.id,
+                            Assistencia.tipus_registre == TipusRegistreEnum.no_assistit
+                        )
+                    )
+                )
+            ).one()
 
+            return absence > 0
+        finally:
+            session.close()
+
+    def has_assisted(self, user: Usuari, clase: Classe, horari: Horari) -> bool:
+        session: Session = self.__session_factory()
+        try:
             assistencia = session.exec(
                 select(func.count()).where(
                     Usuari.id == user.id,
                     Usuari.assistencies.any(
                         and_(
-                            Assistencia.timestamp >= start_of_day,
-                            Assistencia.timestamp <= end_of_day,
-                            Assistencia.tipus_registre == TipusRegistreEnum.entrada
+                            Assistencia.classe_id == clase.id,
+                            Assistencia.horari_id == horari.id,
+                            Assistencia.tipus_registre == TipusRegistreEnum.assistit or Assistencia.tipus_registre == TipusRegistreEnum.retard
                         )
                     )
                 )
@@ -93,39 +100,24 @@ class UserService:
         finally:
             session.close()
 
-    def has_assisted_end(self, user: Usuari, date: datetime) -> bool:
+    def mark_assistance(self, user: Usuari, classe: Classe, horari: Horari) -> None:
         session: Session = self.__session_factory()
-        try:
-            start_of_day = datetime(date.year, date.month, date.day)
-            end_of_day = datetime(date.year, date.month, date.day, 23, 59, 59)
 
-            assistencia = session.exec(
-                select(func.count()).where(
-                    Usuari.id == user.id,
-                    Usuari.assistencies.any(
-                        and_(
-                            Assistencia.timestamp >= start_of_day,
-                            Assistencia.timestamp <= end_of_day,
-                            Assistencia.tipus_registre == TipusRegistreEnum.sortida
-                        )
-                    )
+        try:
+            assistance = None
+
+            if self.has_absence(user, classe, horari):
+                assistance = self.__assistance_service.get_assistance_by_user_id(user.id)
+                assistance.tipus_registre = TipusRegistreEnum.retard
+            else:
+                assistance = Assistencia(
+                    usuari_id=user.id,
+                    timestamp_assistencia=lambda: datetime.now(),
+                    horari_id=horari.id,
+                    classe_id=classe.id,
+                    tipus_registre=TipusRegistreEnum.assistit
                 )
-            ).one()
-
-            return assistencia > 0
-        finally:
-            session.close()
-
-    def mark_assistance(self, user: Usuari, dispositiu: Dispositiu, tipus_registre: TipusRegistreEnum) -> None:
-        session: Session = self.__session_factory()
-        try:
-            new_assistance = Assistencia(
-                usuari_id=user.id,
-                timestamp_assistencia=lambda: datetime.now(),
-                dispositiu_id=dispositiu.id,
-                tipus_registre=tipus_registre
-            )
-            session.add(new_assistance)
+            session.add(assistance)
             session.commit()
             self.__logger.info(f"Assistance recorded for user {user.id}.")
         finally:

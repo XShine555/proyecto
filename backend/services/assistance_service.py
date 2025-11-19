@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from sqlalchemy import func
 from sqlmodel import Session, and_, select
-from sqlalchemy.orm import selectinload
 
 from entities.tipus_registre import TipusRegistreEnum
 from entities.classe import Classe
@@ -11,15 +10,18 @@ from entities.usuari import Usuari
 from entities.usuari_classe import UsuariClasse
 from entities.assistencia import Assistencia
 
-class DeviceService:
+class AssistanceService:
     def __init__(self, session_factory, logger):
         self.__session_factory = session_factory
         self.__logger = logger
 
-    def get_device_by_id(self, device_id: int) -> Dispositiu | None:
-        with self.__session_factory() as session:
-            return session.exec(
-                select(Dispositiu)
-                .options(selectinload(Dispositiu.classe))
-                .where(Dispositiu.device_id == device_id)
+    def get_assistance_by_user_id(self, user_id: int):
+        session = self.__session_factory()
+        try:
+            result = session.exec(
+                select(Assistencia).where(Assistencia.usuari_id == user_id)
             ).first()
+
+            return result
+        finally:
+            session.close()

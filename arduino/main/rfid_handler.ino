@@ -1,7 +1,8 @@
 #include <ArduinoJson.h>
 
 #define RFID_LOG_PREFIX "RFID"
-#define RFID_MESSAGE_COOLDOWN 5000
+#define RFID_MESSAGE_COOLDOWN 15000
+#define RFID_LED_TIME 5000
 
 #define RFID_SDA_PIN 4
 #define RFID_RST_PIN 16
@@ -23,12 +24,13 @@ void rfidOnAwsMessageReceived(JsonDocument& doc) {
 
   bool isAllowed = doc["isAllowed"].as<bool>();
   if (isAllowed) {
-    String username = doc["username"].as<String>();
-    setLcdMessage("Bienvenido " + username, 0, 5000);
+    ledSuccess(RFID_LED_TIME);
+  } else {
+    ledError(RFID_LED_TIME);
   }
-  else {
-    setLcdMessage("Acceso denegado.", 0, 5000);
-  }
+
+  String message = doc["message"].as<String>();
+  setLcdMessage(message, 0, 5000);
 }
 
 void setupRfid() {
@@ -70,7 +72,8 @@ void loopRfid() {
       return;
     rfidIsWaitingForMessage = false;
     rfidWaitingMessageTime = 0;
-    setLcdMessage("Error.", 0, 2500);
+    setLcdMessage("Timeout alcanzado.", 0, RFID_MESSAGE_COOLDOWN);
+    logError(RFID_LOG_PREFIX, "Cooldown exceeded while waiting for a response.");
   }
 
   String uid = tryReadRfid();

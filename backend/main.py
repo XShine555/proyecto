@@ -19,14 +19,20 @@ logging.basicConfig(
 
 mqtt_logger = logging.getLogger("mqtt_service")
 device_logger = logging.getLogger("device_service")
+horari_logger = logging.getLogger("horari_service")
 user_logger = logging.getLogger("user_service")
+assistance_logger = logging.getLogger("assistance_service")
 
 from services.mqtt_service import MQTTService
 from services.user_service import UserService
 from services.device_service import DeviceService
-user_service = UserService(session_factory, user_logger)
+from services.horari_service import HorariService
+from services.assistance_service import AssistanceService
+assistance_service = AssistanceService(session_factory, assistance_logger)
+user_service = UserService(session_factory, assistance_service, user_logger)
 device_service = DeviceService(session_factory, device_logger)
-mqtt_service = MQTTService(session_factory, user_service, device_service, mqtt_logger)
+horari_service = HorariService(session_factory, user_service, device_service, horari_logger)
+mqtt_service = MQTTService(session_factory, user_service, device_service, horari_service, mqtt_logger)
 
 @asynccontextmanager
 async def lifespan(app):

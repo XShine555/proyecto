@@ -54,16 +54,16 @@ CREATE TABLE IF NOT EXISTS `HORARIS` (
 CREATE TABLE IF NOT EXISTS `ASSISTENCIA` (
   `id` int NOT NULL AUTO_INCREMENT,
   `usuari_id` int NOT NULL,
-  `dispositiu_id` int NOT NULL,
+  `classe_id` int NOT NULL,
   `horari_id` int NOT NULL,
   `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `tipus_registre` enum('entrada','sortida') NOT NULL,
+  `tipus_registre` enum('assistit','retard','no_assistit') NOT NULL,
   PRIMARY KEY (`id`),
   KEY `usuari_id` (`usuari_id`),
-  KEY `dispositiu_id` (`dispositiu_id`),
+  KEY `classe_id` (`classe_id`),
   KEY `horari_id` (`horari_id`),
   CONSTRAINT `ASSISTENCIA_ibfk_1` FOREIGN KEY (`usuari_id`) REFERENCES `USUARIS` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `ASSISTENCIA_ibfk_2` FOREIGN KEY (`dispositiu_id`) REFERENCES `DISPOSITIUS` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `ASSISTENCIA_ibfk_2` FOREIGN KEY (`classe_id`) REFERENCES `CLASSES` (`id`) ON DELETE CASCADE,
   CONSTRAINT `ASSISTENCIA_ibfk_3` FOREIGN KEY (`horari_id`) REFERENCES `HORARIS` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

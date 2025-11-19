@@ -5,15 +5,17 @@ import paho.mqtt.client as mqtt
 import ssl
 from datetime import datetime
 
+from entities.dispositiu import Dispositiu
 from entities.tipus_registre import TipusRegistreEnum
 from services.user_service import UserService
 
 class MQTTService:
-    def __init__(self, session_factory, user_service, device_service, logger):
+    def __init__(self, session_factory, user_service, device_service, horari_service, logger):
         self.session_factory = session_factory
         self.__logger = logger
         self.__user_service: UserService = user_service
         self.__device_service = device_service
+        self.__horari_service = horari_service
         
         self.thing_name = getenv("AWS_MQTT_THING_NAME")
         self.aws_endpoint = getenv("AWS_ENDPOINT_URL")
@@ -65,10 +67,10 @@ class MQTTService:
             self.__logger.error(f"Missing device_id, rfid_id or thing_name in payload: {payload}")
             return
         
-        device = self.__device_service.get_device_by_id(device_id)
+        device : Dispositiu = self.__device_service.get_device_by_id(device_id)
         if not device:
             json_response = json_dumps({
-                "errorMessage": "Device not found",
+                "message": "Dispositivo no encontrado",
                 "isAllowed": False
             })
             self.__logger.warning(f"No device found with Device Id: \"{device_id}\"")
@@ -80,35 +82,43 @@ class MQTTService:
         user = self.__user_service.get_user_by_rfid_id(rfid_id)
         if not user:
             json_response = json_dumps({
-                "errorMessage": "User not found",
+                "message": "Usuario no encontrado",
                 "isAllowed": False
             })
             self.__logger.warning(f"No user found with RFID Id: \"{rfid_id}\"")
             self.publish(thing_name, json_response)
             return
             
-        has_assisted_start = self.__user_service.has_assisted_start(user, datetime.now())
-        has_assisted_end = self.__user_service.has_assisted_end(user, datetime.now())
-        if has_assisted_start and has_assisted_end:
+        active_horari = self.__horari_service.get_active_horari_for_classe(device.classe_id, datetime.now())
+        if not active_horari:
             json_response = json_dumps({
                 "userId": user.id,
                 "username": f"{user.nom} {user.cognoms}",
                 "isAllowed": False,
-                "errorMessage": "User has already assisted today"
+                "message": "No hay un horario activo para esta clase"
             })
             self.publish(thing_name, json_response)
-            self.__logger.info(f"User {user.nom} {user.cognoms} (Id: {user.id}) has already assisted today.")
+            self.__logger.info(f"No active schedule for Class Id: \"{device.classe_id}\" when User Id: \"{user.id}\" attempted access.")
+            return
+
+        has_assisted = self.__user_service.has_assisted(user, device.classe, active_horari)
+        if has_assisted:
+            json_response = json_dumps({
+                "userId": user.id,
+                "username": f"{user.nom} {user.cognoms}",
+                "isAllowed": True,
+                "message": "Ya has registrado tu asistencia"
+            })
+            self.publish(thing_name, json_response)
+            self.__logger.info(f"User Id: \"{user.id}\" has already registered attendance for Class Id: \"{device.classe_id}\" and Schedule Id: \"{active_horari.id}\".")
             return
         
-        if has_assisted_start:
-            self.__user_service.mark_assistance(user, device, TipusRegistreEnum.sortida)
-        else:
-            self.__user_service.mark_assistance(user, device, TipusRegistreEnum.entrada)
-        
+        self.__user_service.mark_assistance(user, device.classe, active_horari)
         json_response = json_dumps({
             "userId": user.id,
             "username": f"{user.nom} {user.cognoms}",
-            "isAllowed": self.__user_service.has_access(user.id, device_id)
+            "isAllowed": self.__user_service.has_access(user, device),
+            "message": f"Bienvenido {user.nom} {user.cognoms}"
         })
         self.publish(thing_name, json_response)
         self.__logger.info(f"User {user.nom} {user.cognoms} (Id: {user.id}) accessed Device Id: \"{device_id}\" using RFID Id: \"{rfid_id}\"")
