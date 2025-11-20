@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from sqlalchemy import func
-from sqlmodel import Session, and_, select
+from sqlmodel import Session, and_, select, or_
 
 from entities.tipus_registre import TipusRegistreEnum
 from entities.classe import Classe
@@ -90,7 +90,10 @@ class UserService:
                         and_(
                             Assistencia.classe_id == clase.id,
                             Assistencia.horari_id == horari.id,
-                            Assistencia.tipus_registre == TipusRegistreEnum.assistit or Assistencia.tipus_registre == TipusRegistreEnum.retard
+                            or_(
+                                Assistencia.tipus_registre == TipusRegistreEnum.assistit,
+                                Assistencia.tipus_registre == TipusRegistreEnum.retard
+                            )
                         )
                     )
                 )
@@ -119,6 +122,7 @@ class UserService:
                 )
             session.add(assistance)
             session.commit()
+            session.refresh(assistance)
             self.__logger.info(f"Assistance recorded for user {user.id}.")
         finally:
             session.close()
