@@ -3,19 +3,30 @@ from pathlib import Path
 from json import loads as json_loads, dumps as json_dumps
 import paho.mqtt.client as mqtt
 import ssl
-from datetime import datetime
 
-from entities.dispositiu import Dispositiu
 from entities.tipus_registre import TipusRegistreEnum
-from services.user_service import UserService
+from services.horari_service import HorariService
+from services.assistencia_service import AssistenciaService
+from services.classe_service import ClasseService
+from services.dispositiu_service import DispositiuService
+from services.usuari_service import UsuariService
 
 class MQTTService:
-    def __init__(self, session_factory, user_service, device_service, horari_service, logger):
+    def __init__(self, 
+                 session_factory, 
+                 user_service: UsuariService, 
+                 dispositiu_service: DispositiuService, 
+                 classe_service: ClasseService, 
+                 assistencia_service: AssistenciaService, 
+                 horari_service: HorariService,
+                 logger):
         self.session_factory = session_factory
         self.__logger = logger
-        self.__user_service: UserService = user_service
-        self.__device_service = device_service
-        self.__horari_service = horari_service
+        self.__user_service: UsuariService = user_service
+        self.__dispositiu_service: DispositiuService = dispositiu_service
+        self.__classe_service: ClasseService = classe_service
+        self.__assistencia_service: AssistenciaService = assistencia_service
+        self.__horari_service: HorariService = horari_service
         
         self.thing_name = getenv("AWS_MQTT_THING_NAME")
         self.aws_endpoint = getenv("AWS_ENDPOINT_URL")
@@ -58,6 +69,7 @@ class MQTTService:
             payload_str = msg.payload.decode('utf-8')
             payload = json_loads(payload_str)
         except Exception as e:
+            self.__logger.error(f"Error decoding MQTT message payload: {e}")
             return
 
         thing_name = payload.get("thing_name")
@@ -67,7 +79,7 @@ class MQTTService:
             self.__logger.error(f"Missing device_id, rfid_id or thing_name in payload: {payload}")
             return
         
-        device : Dispositiu = self.__device_service.get_device_by_id(device_id)
+        device = self.__dispositiu_service.get_dispositiu_by_device_id(device_id)
         if not device:
             json_response = json_dumps({
                 "message": "Dispositivo no encontrado",
@@ -79,7 +91,7 @@ class MQTTService:
         
         self.__logger.info(f"Processed message from Device Id: \"{device_id}\" with RFID Id: \"{rfid_id}\"")
 
-        user = self.__user_service.get_user_by_rfid_id(rfid_id)
+        user = self.__user_service.get_usuari_by_rfid(rfid_id)
         if not user:
             json_response = json_dumps({
                 "message": "Usuario no encontrado",
@@ -88,21 +100,45 @@ class MQTTService:
             self.__logger.warning(f"No user found with RFID Id: \"{rfid_id}\"")
             self.publish(thing_name, json_response)
             return
-            
-        active_horari = self.__horari_service.get_active_horari_for_classe(device.classe_id, datetime.now())
+        
+        classe_assignatura = self.__classe_service.get_active_assignatura_for_classe(device.classe_id)
+        if not classe_assignatura:
+            json_response = json_dumps({
+                "userId": user.id,
+                "username": f"{user.nom} {user.cognoms}",
+                "isAllowed": False,
+                "message": "La clase no tiene una asignatura activa"
+            })
+            self.publish(thing_name, json_response)
+            self.__logger.info(f"No active subject for Class Id: \"{device.classe_id}\" when User Id: \"{user.id}\" attempted access.")
+            return
+        
+        has_user_access = self.__user_service.has_usuari_access_to_assignatura(user.id, classe_assignatura.id)
+        if not has_user_access:
+            json_response = json_dumps({
+                "userId": user.id,
+                "username": f"{user.nom} {user.cognoms}",
+                "isAllowed": False,
+                "message": "No tienes acceso a esta asignatura"
+            })
+            self.publish(thing_name, json_response)
+            self.__logger.info(f"User Id: \"{user.id}\" does not have access to Subject Id: \"{classe_assignatura.id}\" for Class Id: \"{device.classe_id}\".")
+            return
+        
+        active_horari = self.__horari_service.get_active_horari(classe_assignatura.id)
         if not active_horari:
             json_response = json_dumps({
                 "userId": user.id,
                 "username": f"{user.nom} {user.cognoms}",
                 "isAllowed": False,
-                "message": "No hay un horario activo para esta clase"
+                "message": "No hay un horario activo para esta asignatura"
             })
             self.publish(thing_name, json_response)
-            self.__logger.info(f"No active schedule for Class Id: \"{device.classe_id}\" when User Id: \"{user.id}\" attempted access.")
+            self.__logger.info(f"No active schedule for Subject Id: \"{classe_assignatura.id}\" when User Id: \"{user.id}\" attempted access.")
             return
 
-        has_assisted = self.__user_service.has_assisted(user, device.classe, active_horari)
-        if has_assisted:
+        has_assisted = self.__assistencia_service.get_assistencia_by_user_id(user.id, classe_assignatura.id, active_horari.id)
+        if has_assisted and has_assisted.tipus_registre == TipusRegistreEnum.assistit:
             json_response = json_dumps({
                 "userId": user.id,
                 "username": f"{user.nom} {user.cognoms}",
@@ -113,11 +149,11 @@ class MQTTService:
             self.__logger.info(f"User Id: \"{user.id}\" has already registered attendance for Class Id: \"{device.classe_id}\" and Schedule Id: \"{active_horari.id}\".")
             return
         
-        self.__user_service.mark_assistance(user, device.classe, active_horari)
+        self.__assistencia_service.mark_assistencia(user.id, classe_assignatura.id, active_horari.id)
         json_response = json_dumps({
             "userId": user.id,
             "username": f"{user.nom} {user.cognoms}",
-            "isAllowed": self.__user_service.has_access(user, device),
+            "isAllowed": True,
             "message": f"Bienvenido {user.nom} {user.cognoms}"
         })
         self.publish(thing_name, json_response)

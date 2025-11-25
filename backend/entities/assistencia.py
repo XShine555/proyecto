@@ -6,27 +6,27 @@ from typing import TYPE_CHECKING
 from entities.tipus_registre import TipusRegistreEnum
 
 if TYPE_CHECKING:
-    from entities.classe import Classe
+    from entities.assignatura import Assignatura
     from entities.horari import Horari
     from entities.justificacio import Justificacio
     from entities.usuari import Usuari
 
 class Assistencia(SQLModel, table=True):
     __tablename__ = "ASSISTENCIA"
-
+    
     id: Optional[int] = Field(default=None, primary_key=True)
     usuari_id: int = Field(foreign_key="USUARIS.id")
-    classe_id: int = Field(foreign_key="CLASSES.id")
+    assignatura_id: int = Field(foreign_key="ASSIGNATURES.id")
     horari_id: int = Field(foreign_key="HORARIS.id")
     timestamp: datetime = Field(default_factory=lambda: datetime.now())
     tipus_registre: TipusRegistreEnum
 
     usuari: "Usuari" = Relationship(back_populates="assistencies")
-    classe: "Classe" = Relationship(back_populates="assistencies")
+    assignatura: "Assignatura" = Relationship(back_populates="assistencies")
     horari: "Horari" = Relationship(back_populates="assistencies")
     justificacions: List["Justificacio"] = Relationship(back_populates="assistencia")
 
-from entities.classe import Classe
+from entities.assignatura import Assignatura
 from entities.horari import Horari
 from entities.justificacio import Justificacio
 from entities.usuari import Usuari

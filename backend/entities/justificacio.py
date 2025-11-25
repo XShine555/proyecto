@@ -1,4 +1,4 @@
-from typing import Optional, Literal
+from typing import Optional
 from datetime import datetime, timezone
 from sqlmodel import SQLModel, Field, Relationship
 from typing import TYPE_CHECKING

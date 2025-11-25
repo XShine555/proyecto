@@ -15,8 +15,16 @@ CREATE TABLE IF NOT EXISTS `USUARIS` (
 CREATE TABLE IF NOT EXISTS `CLASSES` (
   `id` int NOT NULL AUTO_INCREMENT,
   `nom` varchar(100) NOT NULL,
-  `planta` int DEFAULT NULL,
+  `planta` int NOT NULL,
   PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS `ASSIGNATURES` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `nom` varchar(100) NOT NULL,
+  `classe_id` int NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `ASSIGNATURES_ibfk_1` FOREIGN KEY (`classe_id`) REFERENCES `CLASSES` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `DISPOSITIUS` (
@@ -45,45 +53,42 @@ CREATE TABLE IF NOT EXISTS `HORARIS` (
   `id` int NOT NULL AUTO_INCREMENT,
   `timestamp_inici` datetime NOT NULL,
   `timestamp_fi` datetime NOT NULL,
-  `classe_id` int NOT NULL,
+  `assignatura_id` int NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `classe_id` (`classe_id`),
-  CONSTRAINT `HORARIS_ibfk_1` FOREIGN KEY (`classe_id`) REFERENCES `CLASSES` (`id`) ON DELETE CASCADE
+  KEY `assignatura_id` (`assignatura_id`),
+  CONSTRAINT `HORARIS_ibfk_1` FOREIGN KEY (`assignatura_id`) REFERENCES `ASSIGNATURES` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `ASSISTENCIA` (
   `id` int NOT NULL AUTO_INCREMENT,
   `usuari_id` int NOT NULL,
-  `classe_id` int NOT NULL,
+  `assignatura_id` int NOT NULL,
   `horari_id` int NOT NULL,
   `timestamp` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `tipus_registre` enum('assistit','retard','no_assistit') NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `usuari_id` (`usuari_id`),
-  KEY `classe_id` (`classe_id`),
-  KEY `horari_id` (`horari_id`),
+  PRIMARY KEY (`id`, `usuari_id`, `assignatura_id`, `horari_id`),
   CONSTRAINT `ASSISTENCIA_ibfk_1` FOREIGN KEY (`usuari_id`) REFERENCES `USUARIS` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `ASSISTENCIA_ibfk_2` FOREIGN KEY (`classe_id`) REFERENCES `CLASSES` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `ASSISTENCIA_ibfk_2` FOREIGN KEY (`assignatura_id`) REFERENCES `ASSIGNATURES` (`id`) ON DELETE CASCADE,
   CONSTRAINT `ASSISTENCIA_ibfk_3` FOREIGN KEY (`horari_id`) REFERENCES `HORARIS` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `JUSTIFICACIONS` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `ASSISTENCIA_id` int NOT NULL,
+  `assistencia_id` int NOT NULL,
   `motiu` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL,
   `document` varchar(255) DEFAULT NULL,
   `estat` enum('pendiente','aprobado','rechazado') DEFAULT 'pendiente',
   `data_solicitud` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `ASSISTENCIA_id` (`ASSISTENCIA_id`),
-  CONSTRAINT `JUSTIFICACIONS_ibfk_1` FOREIGN KEY (`ASSISTENCIA_id`) REFERENCES `ASSISTENCIA` (`id`) ON DELETE CASCADE
+  KEY `assistencia_id` (`assistencia_id`),
+  CONSTRAINT `JUSTIFICACIONS_ibfk_1` FOREIGN KEY (`assistencia_id`) REFERENCES `ASSISTENCIA` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE IF NOT EXISTS `USUARIS_CLASSES` (
+CREATE TABLE IF NOT EXISTS `USUARIS_ASSIGNATURES` (
   `usuari_id` int NOT NULL,
-  `classe_id` int NOT NULL,
-  PRIMARY KEY (`usuari_id`,`classe_id`),
-  KEY `classe_id` (`classe_id`),
-  CONSTRAINT `USUARIS_CLASSES_ibfk_1` FOREIGN KEY (`usuari_id`) REFERENCES `USUARIS` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `USUARIS_CLASSES_ibfk_2` FOREIGN KEY (`classe_id`) REFERENCES `CLASSES` (`id`) ON DELETE CASCADE
+  `assignatura_id` int NOT NULL,
+  PRIMARY KEY (`usuari_id`,`assignatura_id`),
+  KEY `assignatura_id` (`assignatura_id`),
+  CONSTRAINT `USUARIS_ASSIGNATURES_ibfk_1` FOREIGN KEY (`usuari_id`) REFERENCES `USUARIS` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `USUARIS_ASSIGNATURES_ibfk_2` FOREIGN KEY (`assignatura_id`) REFERENCES `ASSIGNATURES` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
