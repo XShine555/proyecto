@@ -4,6 +4,7 @@ from json import loads as json_loads, dumps as json_dumps
 import paho.mqtt.client as mqtt
 import ssl
 
+from entities.tipus_usuari import TipusUsuariEnum
 from entities.tipus_registre import TipusRegistreEnum
 from services.horari_service import HorariService
 from services.assistencia_service import AssistenciaService
@@ -79,6 +80,7 @@ class MQTTService:
             self.__logger.error(f"Missing device_id, rfid_id or thing_name in payload: {payload}")
             return
         
+        # Check device by Device ID
         device = self.__dispositiu_service.get_dispositiu_by_device_id(device_id)
         if not device:
             json_response = json_dumps({
@@ -91,6 +93,7 @@ class MQTTService:
         
         self.__logger.info(f"Processed message from Device Id: \"{device_id}\" with RFID Id: \"{rfid_id}\"")
 
+        # Check user by RFID
         user = self.__user_service.get_usuari_by_rfid(rfid_id)
         if not user:
             json_response = json_dumps({
@@ -101,8 +104,21 @@ class MQTTService:
             self.publish(thing_name, json_response)
             return
         
-        classe_assignatura = self.__classe_service.get_active_assignatura_for_classe(device.classe_id)
-        if not classe_assignatura:
+        # Admin users have unrestricted access
+        if user.tipus == TipusUsuariEnum.admin:
+            json_response = json_dumps({
+                "userId": user.id,
+                "username": f"{user.nom} {user.cognoms}",
+                "isAllowed": True,
+                "message": f"Bienvenido {user.nom} {user.cognoms}"
+            })
+            self.__logger.info(f"Admin User {user.nom} {user.cognoms} (Id: {user.id}) accessed Device Id: \"{device_id}\" using RFID Id: \"{rfid_id}\"")
+            self.publish(thing_name, json_response)
+            return
+        
+        # Check class assignment
+        assignatura = self.__classe_service.get_active_assignatura_for_classe(device.classe_id)
+        if not assignatura:
             json_response = json_dumps({
                 "userId": user.id,
                 "username": f"{user.nom} {user.cognoms}",
@@ -113,8 +129,8 @@ class MQTTService:
             self.__logger.info(f"No active subject for Class Id: \"{device.classe_id}\" when User Id: \"{user.id}\" attempted access.")
             return
         
-        has_user_access = self.__user_service.has_usuari_access_to_assignatura(user.id, classe_assignatura.id)
-        if not has_user_access:
+        has_user_access_to_assignatura = self.__user_service.has_usuari_access_to_assignatura(user.id, assignatura.id)
+        if not has_user_access_to_assignatura:
             json_response = json_dumps({
                 "userId": user.id,
                 "username": f"{user.nom} {user.cognoms}",
@@ -122,10 +138,10 @@ class MQTTService:
                 "message": "No tienes acceso a esta asignatura"
             })
             self.publish(thing_name, json_response)
-            self.__logger.info(f"User Id: \"{user.id}\" does not have access to Subject Id: \"{classe_assignatura.id}\" for Class Id: \"{device.classe_id}\".")
+            self.__logger.info(f"User Id: \"{user.id}\" does not have access to Subject Id: \"{assignatura.id}\" for Class Id: \"{device.classe_id}\".")
             return
         
-        active_horari = self.__horari_service.get_active_horari(classe_assignatura.id)
+        active_horari = self.__horari_service.get_active_horari(assignatura.id)
         if not active_horari:
             json_response = json_dumps({
                 "userId": user.id,
@@ -134,10 +150,10 @@ class MQTTService:
                 "message": "No hay un horario activo para esta asignatura"
             })
             self.publish(thing_name, json_response)
-            self.__logger.info(f"No active schedule for Subject Id: \"{classe_assignatura.id}\" when User Id: \"{user.id}\" attempted access.")
+            self.__logger.info(f"No active schedule for Subject Id: \"{assignatura.id}\" when User Id: \"{user.id}\" attempted access.")
             return
 
-        has_assisted = self.__assistencia_service.get_assistencia_by_user_id(user.id, classe_assignatura.id, active_horari.id)
+        has_assisted = self.__assistencia_service.get_assistencia_by_user_id(user.id, assignatura.id, active_horari.id)
         if has_assisted and has_assisted.tipus_registre == TipusRegistreEnum.assistit:
             json_response = json_dumps({
                 "userId": user.id,
@@ -149,7 +165,7 @@ class MQTTService:
             self.__logger.info(f"User Id: \"{user.id}\" has already registered attendance for Class Id: \"{device.classe_id}\" and Schedule Id: \"{active_horari.id}\".")
             return
         
-        self.__assistencia_service.mark_assistencia(user.id, classe_assignatura.id, active_horari.id)
+        self.__assistencia_service.mark_assistencia(user.id, assignatura.id, active_horari.id)
         json_response = json_dumps({
             "userId": user.id,
             "username": f"{user.nom} {user.cognoms}",

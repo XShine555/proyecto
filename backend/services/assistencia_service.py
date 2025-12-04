@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from entities.horari import Horari
 from services.horari_service import HorariService
 from entities.tipus_registre import TipusRegistreEnum
@@ -47,8 +47,12 @@ class AssistenciaService:
             existing_assistencia.timestamp = now
             self.__assistencia_repository.add_assistencia(existing_assistencia)
         else:
-            is_late = get_horari.timestamp_inici < now and now > get_horari.timestamp_fi
-            tipus_registre = TipusRegistreEnum.retard if is_late else TipusRegistreEnum.assistit
+            timestamp_inici_limit = get_horari.timestamp_inici + timedelta(minutes=10)
+
+            if now <= timestamp_inici_limit:
+                tipus_registre = TipusRegistreEnum.assistit
+            else:
+                tipus_registre = TipusRegistreEnum.retard
             
             new_assistencia = Assistencia(
                 usuari_id=user_id,
